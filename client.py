@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import pickle
 import requests
@@ -9,12 +10,14 @@ class Client:
     _user = None
     _passwd = None
 
-    def __init__(self, user, passwd, username, repo_slug):
+    def __init__(self, user, passwd, username, repo_slug, commit_id, project_dir):
         self._user = user
         self._passwd = passwd
         self._username = username
         self.repo = repo_slug
         self._pickle_count = 0
+        self.commit_id = commit_id
+        self.project_dir = project_dir
 
     def _request(self, method, endpoint, params=None, data=None, is_pags=False, is_commit=False):
         auth = (self._user, self._passwd)
@@ -23,7 +26,6 @@ class Client:
         url = base_url + endpoint
         _json = data
         if is_commit is True:
-            print('is commit')
             try:
                 response = requests.request(method, url, params=params, json=_json, auth=auth, headers=headers)
                 return response
@@ -44,8 +46,6 @@ class Client:
                 print('Error 4: ', e)
                 return False
         response = json.loads(response.text)
-        # print(response)
-        # print('****************')
         if is_commit is False:
             self.parse_data(response)
             if 'next' in response:
@@ -88,8 +88,6 @@ class Client:
                 return False
 
     def parse_data(self, data):
-        print(data)
-        print('**************************************')
         current_dir = os.getcwd()
         try:
             data = json.dumps(data['values'])
@@ -114,8 +112,6 @@ class Client:
             _unpickle = open(filename, "rb")
             for o in json.loads(pickle.load(_unpickle)):
                 content.append(o)
-        # print(content)
-        # print('*************')
         for i in content:
             result.append({
                 'author': i['author']['raw'],
@@ -125,11 +121,14 @@ class Client:
                 'parents': [o['hash'] for o in i['parents']],
                 'branch': self._get_branch(i['hash'], [o['hash'] for o in i['parents']])
             })
-        self.export_markdown(result)
+        try:
+            self.export_markdown(result)
+        except Exception as e:
+            print('Error 11: ', e)
         return result
 
     def _get_branch(self, _hash, parents):
-        os.chdir('/home/nrincon/projects/gearplug/')
+        os.chdir(str(self.project_dir))
         try:
             branches = os.popen('git branch --contains {}'.format(_hash)).read()
         except Exception as e:
@@ -139,26 +138,33 @@ class Client:
         return branches
 
     def export_markdown(self, data):
+        os.chdir(str(self.project_dir))
         current_dir = os.getcwd()
         if not isinstance(data, list):
             return False
-        with open(current_dir + '/mk_release_note_' + str(datetime.datetime.now()), '+w') as out:
+        print('Current dir: ', current_dir)
+        with open(current_dir + '/mk_release_note_' + str(datetime.datetime.now()), 'w') as out:
             for i in data:
-                out.write('## ' + i['message'].replace('\n', ' ') + '\n')
+                out.write('## ' + i['message'].encode('utf-8').replace('\n', ' ') + '\n')
                 out.write('\n')
-                out.write('##### Hash: ' + i['hash'].replace('\n', ' ') + '\n')
+                out.write('##### Hash: ' + i['hash'].encode('utf-8').replace('\n', ' ') + '\n')
                 out.write('\n')
-                out.write('##### Date: ' + i['date'].replace('\n', ' ') + '\n')
+                out.write('##### Date: ' + i['date'].encode('utf-8').replace('\n', ' ') + '\n')
                 out.write('\n')
-                out.write('##### Author: ' + i['author'].replace('\n', ' ') + '\n')
+                out.write('##### Author: ' + i['author'].encode('utf-8').replace('\n', ' ') + '\n')
                 out.write('\n')
                 if isinstance(i['parents'], list):
                     out.write('###### Parents: ' + ', '.join(i['parents']) + '\n')
                 else:
-                    out.write('###### Parents:  ' + i['parents'].replace('\n', ' ') + '\n')
+                    out.write('###### Parents:  ' + i['parents'].encode('utf-8').replace('\n', ' ') + '\n')
                 out.write('\n')
                 if isinstance(i['branch'], list):
                     out.write('###### Branch/s: ' + ', '.join(i['branch']) + '\n')
                 else:
-                    out.write('###### Branch/s:  ' + i['branch'].replace('\n', ' ') + '\n')
+                    out.write('###### Branch/s:  ' + i['branch'].encode('utf-8').replace('\n', ' ') + '\n')
                 out.write('\n')
+
+
+if __name__ == '__main__':
+    app = Client(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6])
+    app.get_prs_commits(app.commit_id)
