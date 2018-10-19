@@ -9,3 +9,4 @@ Release notes generator for Bitbucket repositories, written in Python 3.6.
 # ToDo.
 - Support for GitHub.
 - Clean files after script execution.
+- Update `requirements.txt`.
